@@ -1,0 +1,86 @@
+We first define the ODE system for one cohort of tree
+
+G = growth rate kg/t
+
+D = death rate kg/t
+
+H = harvest rate kg/t
+
+Km = carbon kg conversion constant
+
+Kv = m^3 to kg conversion constant
+
+Gv = groth rate for volume
+
+用了论文0,25,95岁的Norway spruce（没写完）
+
+```julia; eval = false
+using DifferentialEquations
+Kᵥ = [430] #kgm-3
+Kₘ = [0.50] #% of dry weight
+Gᵥ = [[0.2, 19.2, 12.6].*5] # m3 ha−1 5 yrs
+D  = [0.1] #猜的
+H  = [[0, 0.2, 1]] #剪枝比例？
+#define ODE
+function treeODE(du,u,p,t)
+  for i,u0 in enumerate(u)
+    totallen = length(u0)
+    if u[i,totallen]!=0
+      du[i,1] += 142 #不知道怎么确认新生的个数，或者constant
+      du[i,totallen] = 0
+    end
+    for j in 1:totallen-1
+      G = Kᵥ[i]*Gᵥ[i,j]
+      du[i,j] = min(0,(G - D[i] - H[i,j]*y)Kₘ[i])
+    end
+  end
+end
+
+u0 = [[142, 0, 0]] #tCha−1 一棵树
+prob = ODEProblem(treeODE, u0, tspan)
+sol = solve(prob)
+plot(sol)
+```
+太难了，先只用25岁，不考虑年龄,只考虑一种cohort
+```julia
+using DifferentialEquations
+using Plots
+```
+```julia
+Kᵥ = 430 #kgm-3
+Kₘ = 0.50 #% of dry weight
+Gᵥ = 19.2 # m3 ha−1 per yrs
+D  = 0.1 #猜的
+H  = 0.2 #剪枝比例？
+#define ODE
+function treeODE(du,u,p,t)
+      G = Kᵥ*Gᵥ
+      du[1] = (G - D- H*u[1])Kₘ./365
+end
+
+u0 = [142] #tCha−1 猜的
+tspan = (0,10)
+treeprob = ODEProblem(treeODE, u0, tspan)
+treesol = solve(treeprob)
+plot(treesol)
+```
+这里u1就是树木的carbon
+
+下面看一种product的carbon
+Kp = 多少kg的harvesting变成了product
+alpha = 每年释放多少（这里先用线性）
+```julia
+lifespan = 1
+α = 1/lifespan/365
+Kₚ = 0.5 # 随便猜的
+function productODE(du,u,p,t)
+      du[1] = (1-α)u[1] + H*treesol(t)[end]*Kₘ*Kₚ #treesol(t)告诉我们这个时间是多少carbon
+end
+u0 = [0] #tCha−1 猜的
+tspan = (0,4)
+productprob = ODEProblem(productODE, u0, tspan)
+productsol = solve(productprob)
+plot(productsol)
+```
+product因为一直没砍树，所以出来的是exponential的
+注释：上面的dt应该都是每天
